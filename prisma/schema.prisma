@@ -1,0 +1,267 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MEMBER
+  ADMIN
+}
+
+enum Department {
+  SME
+  LAKA
+  ONBOARDING
+  SPECIALSERVICE
+  WFM
+  CX
+}
+
+enum LicenseType {
+  COPILOT_ADVANCED
+  COPILOT_STUDIO
+  POWER_AUTOMATE
+}
+
+enum ProjectStatus {
+  PLANNING
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+}
+
+enum SavingsType {
+  TIME_EFFICIENCY
+  QUALITY_ENHANCEMENT
+}
+
+enum CourseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BadgeType {
+  PROJECT_COMPLETION
+  COURSE_COMPLIANCE
+  INNOVATION_MILESTONE
+  DEPARTMENT_CHAMPION
+  QUARTERLY_WINNER
+}
+
+model User {
+  id        String      @id @default(cuid())
+  email     String      @unique
+  name      String?
+  role      Role        @default(MEMBER)
+  department Department?
+  lastReviewDate DateTime? // For bi-annual compliance reviews
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  // Relations
+  licenses         UserLicense[]
+  projects         ProjectMember[]
+  ownedProjects    Project[]       @relation("ProjectOwner")
+  courseCompletions CourseCompletion[]
+  badges           UserBadge[]
+  notifications    Notification[]
+  businessCases    BusinessCase[]
+
+  @@map("users")
+}
+
+model UserLicense {
+  id         String      @id @default(cuid())
+  userId     String
+  licenseType LicenseType
+  issuedDate DateTime    @default(now())
+  expiryDate DateTime?
+  isActive   Boolean     @default(true)
+  
+  // Relations
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, licenseType])
+  @@map("user_licenses")
+}
+
+model Project {
+  id              String        @id @default(cuid())
+  name            String
+  description     String?
+  ownerId         String
+  status          ProjectStatus @default(PLANNING)
+  startDate       DateTime?
+  endDate         DateTime?
+  estimatedSavings Float?
+  actualSavings   Float?
+  savingsType     SavingsType?
+  department      Department?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  owner           User          @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members         ProjectMember[]
+  businessCase    BusinessCase?
+  fteAnalytics    FteAnalytics[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  role      String   @default("member")
+  joinedAt  DateTime @default(now())
+
+  // Relations
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+model BusinessCase {
+  id              String      @id @default(cuid())
+  projectId       String      @unique
+  purpose         String
+  department      Department?
+  savingsType     SavingsType
+  expectedBenefit String?
+  timeEfficiency  Float?      // Hours saved per month
+  qualityImpact   String?
+  aiGenerated     Boolean     @default(false)
+  rawInput        String?     // Original freetext or questionnaire responses
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  createdBy       String
+
+  // Relations
+  project         Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator         User        @relation(fields: [createdBy], references: [id])
+
+  @@map("business_cases")
+}
+
+model Course {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  isMandatory   Boolean  @default(false)
+  licenseType   LicenseType?
+  deadline      DateTime? // For course deadline notifications
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  completions   CourseCompletion[]
+
+  @@map("courses")
+}
+
+model CourseCompletion {
+  id            String       @id @default(cuid())
+  userId        String
+  courseId      String
+  status        CourseStatus @default(PENDING)
+  screenshotUrl String?
+  completedDate DateTime?
+  submittedAt   DateTime?    // When user submitted for review
+  reviewedAt    DateTime?
+  reviewedBy    String?
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // Relations
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course        Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@map("course_completions")
+}
+
+model FteAnalytics {
+  id              String   @id @default(cuid())
+  projectId       String
+  month           DateTime
+  hoursSaved      Float
+  fteReduction    Float    // Calculated: hoursSaved / (26.25 * 4.33)
+  calculatedAt    DateTime @default(now())
+
+  // Relations
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, month])
+  @@map("fte_analytics")
+}
+
+model Badge {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  type        BadgeType
+  iconUrl     String?
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  userBadges  UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeId   String
+  awardedAt DateTime @default(now())
+  reason    String?
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@map("user_badges")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   // "compliance", "routine", "achievement", etc.
+  isUrgent  Boolean  @default(false)
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String   // "project", "course", "user", etc.
+  entityId  String?
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}

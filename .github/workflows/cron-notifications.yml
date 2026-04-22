@@ -1,0 +1,64 @@
+name: Scheduled Notifications
+
+on:
+  schedule:
+    # Daily at 9 AM UTC (4 AM EST)
+    - cron: '0 9 * * *'
+    # Weekly on Monday at 10 AM UTC  
+    - cron: '0 10 * * 1'
+    # Monthly on 1st at 11 AM UTC
+    - cron: '0 11 1 * *'
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      task_type:
+        description: 'Type of notification task to run'
+        required: true
+        default: 'daily'
+        type: choice
+        options:
+          - daily
+          - weekly  
+          - monthly
+          - all
+
+jobs:
+  run-notifications:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Determine task type
+        id: task
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "type=${{ github.event.inputs.task_type }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event.schedule }}" == "0 9 * * *" ]]; then
+            echo "type=daily" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event.schedule }}" == "0 10 * * 1" ]]; then
+            echo "type=weekly" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event.schedule }}" == "0 11 1 * *" ]]; then
+            echo "type=monthly" >> $GITHUB_OUTPUT
+          else
+            echo "type=daily" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Run notification task
+        run: |
+          response=$(curl -X POST ${{ secrets.VERCEL_URL }}/api/cron/notifications \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{"task": "${{ steps.task.outputs.type }}"}' \
+            -w "%{http_code}" \
+            -s)
+          
+          http_code="${response: -3}"
+          body="${response%???}"
+          
+          if [[ $http_code != "200" ]]; then
+            echo "❌ Notification task failed with status: $http_code"
+            echo "Response: $body"
+            exit 1
+          else
+            echo "✅ Notification task completed successfully"
+            echo "Response: $body"
+          fi
