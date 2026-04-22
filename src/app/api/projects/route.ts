@@ -4,6 +4,9 @@ import { prisma } from '@/lib/db'
 import { parseBusinessCase, processGuidedAnswers } from '@/lib/ai'
 import { calculateFTE } from '@/lib/utils'
 
+// Force dynamic rendering to prevent build-time database queries
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()

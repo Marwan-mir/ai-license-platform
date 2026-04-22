@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { notificationService } from '@/lib/notification-service'
 
+// Force dynamic rendering to prevent build-time database queries
+export const dynamic = 'force-dynamic'
+
 // This endpoint handles scheduled notification tasks
 // In production, this would be called by a cron job service (Vercel Cron, GitHub Actions, etc.)
 
